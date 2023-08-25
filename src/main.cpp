@@ -5,17 +5,97 @@
 #include <vector>
 #include <algorithm>
 #include <wex.h>
+#include <GraphTheory.h>
 #include "cStarterGUI.h"
 
-std::vector<std::vector<std::string>>
-listMatchedAtoms(
-    const std::vector<std::string> &toMatch,
-    const std::vector<std::string> &Candidates)
+struct sProblemInstance
 {
-    std::vector<std::vector<std::string>> O;
+    raven::graph::sGraphData gd; // graph representation of molecule
+    std::string root;
+    std::vector<std::string> match; // required atoms
+    std::vector<std::string> candidates;
+    std::vector<std::vector<std::string>> subGraphs;
+} gPI;
 
+void generate1()
+{
+    gPI.gd.g.clear();
+    gPI.gd.g.add("2B", "1A");
+    gPI.gd.g.add("2B", "3A");
+    gPI.gd.g.add("2B", "4A");
+    gPI.gd.g.add("2B", "5C");
+    gPI.gd.g.add("3A", "10D");
+
+    std::vector<std::string> m{
+        "B", "A", "A"};
+    gPI.match = m;
+
+    gPI.root = "2B";
+}
+
+void findCandidates()
+{
+    raven::graph::cGraph &g = gPI.gd.g;
+
+    // atoms connected directly to root
+    gPI.candidates = g.userName(g.adjacentOut(g.find(gPI.root)));
+
+    for (int v = 0; v < g.vertexCount(); v++)
+    {
+        auto name = g.userName(v);
+
+        // check for alredy a candidate
+        if (std::find(gPI.candidates.begin(), gPI.candidates.end(), name) != gPI.candidates.end())
+            continue;
+
+        // check for in match list
+        if (std::find(gPI.match.begin(), gPI.match.end(), name.substr(1, 1)) == gPI.match.end())
+            continue;
+
+        gPI.gd.startName = gPI.root;
+        gPI.gd.endName = g.userName(v);
+        auto p = bfsPath(gPI.gd);
+        if (!p.size())
+        {
+            // v not reachable from root
+            continue;
+        }
+        bool reachable = true;
+        for (int u : p)
+        {
+            if (std::find(gPI.match.begin(), gPI.match.end(), g.userName(u).substr(1, 1)) == gPI.match.end())
+            {
+                // v not reachable through atom types in match
+                reachable = false;
+                break;
+            }
+        }
+        if (!reachable)
+            break;
+
+        gPI.candidates.push_back(g.userName(v));
+    }
+
+    // remove if not in match list
+    gPI.candidates.erase(
+        std::remove_if(
+            gPI.candidates.begin(), gPI.candidates.end(),
+            [](const std::string &c) -> bool
+            {
+                return std::find(gPI.match.begin(), gPI.match.end(), c.substr(1, 1)) == gPI.match.end();
+            }),
+        gPI.candidates.end());
+
+    std::cout << "Candidates: ";
+    for (auto &c : gPI.candidates)
+        std::cout << c << " ";
+    std::cout << "\n";
+}
+
+void findSubGraphs()
+{
     // Start with vector of candidates sorted into lexigraphic order
-    auto vc = Candidates;
+    auto vc = gPI.candidates;
     std::sort(vc.begin(), vc.end(),
               [](const std::string &a, const std::string &b) -> bool
               {
@@ -28,20 +108,21 @@ listMatchedAtoms(
         // a new empty selection
         std::vector<std::string> vSelected;
 
-        // loop over candidate in permuted list
+        // loop over candidates in permuted list
         for (auto &consider : vc)
         {
-            std::string considerType = consider.substr(0,1);
+            std::string considerType = consider.substr(1, 1);
 
-            int cm = std::count(toMatch.begin(), toMatch.end(),considerType);
+            // count number of this type required
+            int cm = std::count(gPI.match.begin(), gPI.match.end(), considerType);
 
             // count number of of this type selected so far
             int cSelected = std::count_if(vSelected.begin(), vSelected.end(),
                                           [&](const std::string &b) -> bool
                                           {
-                                              return considerType[0] == b[0];
+                                              return considerType[0] == b[1];
                                           });
-            
+
             // add to selection if another of this type is required
             if (cm > cSelected)
                 vSelected.push_back(consider);
@@ -51,29 +132,47 @@ listMatchedAtoms(
         if (vSelected.size())
         {
             // check that this a unique selection
-            if (std::find_if(O.begin(), O.end(),
-                          [&](const std::vector<std::string> & v) -> bool
-                          {
-                              return std::is_permutation(v.begin(), v.end(), vSelected.begin());
-                          }) == O.end())
+            if (std::find_if(gPI.subGraphs.begin(), gPI.subGraphs.end(),
+                             [&](const std::vector<std::string> &v) -> bool
+                             {
+                                 return std::is_permutation(v.begin(), v.end(), vSelected.begin());
+                             }) == gPI.subGraphs.end())
             {
                 // add selection to output list of selection
-                O.push_back(vSelected);
+                gPI.subGraphs.push_back(vSelected);
             }
         }
 
     } while (std::next_permutation(vc.begin(), vc.end()));
 
-    std::cout << "\nO\n";
-    for( auto& v : O ) {
-        for( auto s : v )
+    // remove subgraphs that are not connected
+    auto rootConnected = gPI.gd.g.userName(gPI.gd.g.adjacentOut(gPI.gd.g.find(gPI.root)));
+    std::vector<int> vrem;
+    int k = -1;
+    for (auto sg : gPI.subGraphs) {
+        k++;
+        for (auto v : sg)
+        {
+            if (std::find(rootConnected.begin(), rootConnected.end(), v) != rootConnected.end())
+                continue;
+            gPI.gd.startName = gPI.root;
+            gPI.gd.endName = v;
+            if( bfsPath(gPI.gd).size() )
+                continue;
+            vrem.push_back( k );
+        }
+        for( int r : vrem )
+            gPI.subGraphs.erase(
+                gPI.subGraphs.begin()+r);
+    }
+
+    std::cout << "\nResults\n";
+    for (auto &v : gPI.subGraphs)
+    {
+        for (auto s : v)
             std::cout << s << " ";
         std::cout << "\n";
     }
-
-
-
-    return O;
 }
 
 class cGUI : public cStarterGUI
@@ -98,9 +197,14 @@ private:
 
 main()
 {
-    auto O = listMatchedAtoms(
-        {"B", "A", "A"},
-        {"B2", "A1", "A3", "A4"});
+    // generate problem instance from specifications
+    generate1();
+
+    // find candidate atoms that vould be included in fragments
+    findCandidates();
+
+    // list fragments
+    findSubGraphs();
 
     cGUI theGUI;
     return 0;
