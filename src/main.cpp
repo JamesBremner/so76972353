@@ -17,6 +17,18 @@ struct sProblemInstance
     std::vector<std::vector<std::string>> subGraphs;
 } gPI;
 
+/// @brief true if name is in strings
+/// @param strings
+/// @param name
+bool is_in(
+    const std::vector<std::string> &strings,
+    const std::string &name)
+{
+    return (std::find(
+                strings.begin(), strings.end(),
+                name) != gPI.candidates.end());
+}
+
 void generate1()
 {
     gPI.gd.g.clear();
@@ -36,7 +48,7 @@ void generate1()
 void findCandidates()
 {
     // check set includes root node type
-    if (std::find(gPI.match.begin(), gPI.match.end(), gPI.root.substr(1, 1)) == gPI.match.end())
+    if (!is_in(gPI.match, gPI.root.substr(1, 1)))
         throw std::runtime_error(
             "match set does not include root type");
 
@@ -49,12 +61,12 @@ void findCandidates()
     {
         auto name = g.userName(v);
 
-        // check for alredy a candidate
-        if (std::find(gPI.candidates.begin(), gPI.candidates.end(), name) != gPI.candidates.end())
+        // check for already a candidate
+        if (is_in(gPI.candidates, name))
             continue;
 
-        // check for in match list
-        if (std::find(gPI.match.begin(), gPI.match.end(), name.substr(1, 1)) == gPI.match.end())
+        // check for type in match list
+        if (is_in(gPI.match, name.substr(1, 1)))
             continue;
 
         // all paths from v to root
@@ -72,14 +84,16 @@ void findCandidates()
             bool pathOK = true;
             for (int u : p)
             {
-                if (std::find(gPI.match.begin(), gPI.match.end(), g.userName(u).substr(1, 1)) == gPI.match.end())
+                if (!is_in(
+                        gPI.match,
+                        g.userName(u).substr(1, 1)))
                 {
                     // v not reachable through atom types in match
                     pathOK = false;
                     break;
                 }
             }
-            if( pathOK )
+            if (pathOK)
             {
                 reachable = true;
                 break;
@@ -98,7 +112,7 @@ void findCandidates()
             gPI.candidates.begin(), gPI.candidates.end(),
             [](const std::string &c) -> bool
             {
-                return std::find(gPI.match.begin(), gPI.match.end(), c.substr(1, 1)) == gPI.match.end();
+                return (!is_in(gPI.match, c.substr(1, 1)));
             }),
         gPI.candidates.end());
 
