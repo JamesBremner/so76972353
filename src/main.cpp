@@ -36,10 +36,9 @@ void generate1()
 void findCandidates()
 {
     // check set includes root node type
-    if( std::find( gPI.match.begin(),gPI.match.end(),gPI.root.substr(1,1))
-        == gPI.match.end() )
+    if (std::find(gPI.match.begin(), gPI.match.end(), gPI.root.substr(1, 1)) == gPI.match.end())
         throw std::runtime_error(
-            "match set does not include root type"        );
+            "match set does not include root type");
 
     raven::graph::cGraph &g = gPI.gd.g;
 
@@ -58,24 +57,35 @@ void findCandidates()
         if (std::find(gPI.match.begin(), gPI.match.end(), name.substr(1, 1)) == gPI.match.end())
             continue;
 
+        // all paths from v to root
         gPI.gd.startName = gPI.root;
         gPI.gd.endName = g.userName(v);
-        auto p = bfsPath(gPI.gd);
-        if (!p.size())
+        auto vp = dfs_allpaths(gPI.gd);
+        if (!vp.size())
         {
             // v not reachable from root
             continue;
         }
-        bool reachable = true;
-        for (int u : p)
+        bool reachable = false;
+        for (auto &p : vp)
         {
-            if (std::find(gPI.match.begin(), gPI.match.end(), g.userName(u).substr(1, 1)) == gPI.match.end())
+            bool pathOK = true;
+            for (int u : p)
             {
-                // v not reachable through atom types in match
-                reachable = false;
+                if (std::find(gPI.match.begin(), gPI.match.end(), g.userName(u).substr(1, 1)) == gPI.match.end())
+                {
+                    // v not reachable through atom types in match
+                    pathOK = false;
+                    break;
+                }
+            }
+            if( pathOK )
+            {
+                reachable = true;
                 break;
             }
         }
+
         if (!reachable)
             break;
 
@@ -210,22 +220,22 @@ private:
             std::string line;
             for (auto s : v)
                 line += s + " ";
-            S.text( line, {80, 50 + 50 * row++, 200, 25});
+            S.text(line, {80, 50 + 50 * row++, 200, 25});
         }
-        }
-    };
-
-    main()
-    {
-        // generate problem instance from specifications
-        generate1();
-
-        // find candidate atoms that vould be included in fragments
-        findCandidates();
-
-        // list fragments
-        findSubGraphs();
-
-        cGUI theGUI;
-        return 0;
     }
+};
+
+main()
+{
+    // generate problem instance from specifications
+    generate1();
+
+    // find candidate atoms that vould be included in fragments
+    findCandidates();
+
+    // list fragments
+    findSubGraphs();
+
+    cGUI theGUI;
+    return 0;
+}
