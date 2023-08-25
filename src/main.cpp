@@ -149,7 +149,8 @@ void findSubGraphs()
     auto rootConnected = gPI.gd.g.userName(gPI.gd.g.adjacentOut(gPI.gd.g.find(gPI.root)));
     std::vector<int> vrem;
     int k = -1;
-    for (auto sg : gPI.subGraphs) {
+    for (auto sg : gPI.subGraphs)
+    {
         k++;
         for (auto v : sg)
         {
@@ -157,13 +158,13 @@ void findSubGraphs()
                 continue;
             gPI.gd.startName = gPI.root;
             gPI.gd.endName = v;
-            if( bfsPath(gPI.gd).size() )
+            if (bfsPath(gPI.gd).size())
                 continue;
-            vrem.push_back( k );
+            vrem.push_back(k);
         }
-        for( int r : vrem )
+        for (int r : vrem)
             gPI.subGraphs.erase(
-                gPI.subGraphs.begin()+r);
+                gPI.subGraphs.begin() + r);
     }
 
     std::cout << "\nResults\n";
@@ -180,32 +181,45 @@ class cGUI : public cStarterGUI
 public:
     cGUI()
         : cStarterGUI(
-              "Starter",
-              {50, 50, 1000, 500}),
-          lb(wex::maker::make<wex::label>(fm))
+              "so76972353",
+              {50, 50, 1000, 500})
     {
-        lb.move(50, 50, 100, 30);
-        lb.text("Hello World");
+        fm.events().draw(
+            [&](PAINTSTRUCT &ps)
+            {
+                wex::shapes S(ps);
+                display(S);
+            });
 
         show();
         run();
     }
 
 private:
-    wex::label &lb;
-};
+    void display(wex::shapes &S)
+    {
+        int row = 0;
+        for (auto &v : gPI.subGraphs)
+        {
+            std::string line;
+            for (auto s : v)
+                line += s + " ";
+            S.text( line, {80, 50 + 50 * row++, 200, 25});
+        }
+        }
+    };
 
-main()
-{
-    // generate problem instance from specifications
-    generate1();
+    main()
+    {
+        // generate problem instance from specifications
+        generate1();
 
-    // find candidate atoms that vould be included in fragments
-    findCandidates();
+        // find candidate atoms that vould be included in fragments
+        findCandidates();
 
-    // list fragments
-    findSubGraphs();
+        // list fragments
+        findSubGraphs();
 
-    cGUI theGUI;
-    return 0;
-}
+        cGUI theGUI;
+        return 0;
+    }
