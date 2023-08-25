@@ -35,6 +35,12 @@ void generate1()
 
 void findCandidates()
 {
+    // check set includes root node type
+    if( std::find( gPI.match.begin(),gPI.match.end(),gPI.root.substr(1,1))
+        == gPI.match.end() )
+        throw std::runtime_error(
+            "match set does not include root type"        );
+
     raven::graph::cGraph &g = gPI.gd.g;
 
     // atoms connected directly to root
