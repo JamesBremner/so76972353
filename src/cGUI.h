@@ -61,3 +61,18 @@ public:
 protected:
     wex::gui &fm;
 };
+
+class cGUI : public cStarterGUI
+{
+public:
+    cGUI();
+
+private:
+    wex::label &mylbRoot;
+    wex::editbox &myedRoot;
+    wex::label &mylbMatch;
+    wex::editbox &myEdit;
+    wex::button &mybn;
+    wex::button &mybnRead;
+    cSolver solver;
+};

@@ -4,56 +4,12 @@
 #include <iostream>
 #include <vector>
 #include <algorithm>
+
 #include <wex.h>
 #include <GraphTheory.h>
-#include "cStarterGUI.h"
 
-class cSolver
-{
-    raven::graph::sGraphData gd; // graph representation of molecule
-    std::string root;
-    std::vector<std::string> match; // required atoms
-    std::vector<std::string> candidates;
-    std::vector<std::vector<std::string>> subGraphs;
-    bool fRootInMatch;
-
-    void sanity();
-    void removeCandidatesNotInMatch();
-
-    /// @brief Is there path from vertex to root through vertex types in match set
-    /// @param vi
-    /// @return
-    bool isPathToRoot(int vi);
-
-    void addCandidatesReachableFromRoot();
-
-    void sortCandidates();
-
-    std::vector<std::string>
-    listRootConnected();
-
-    void removeUnconnected();
-
-    void addIfNovel(
-        const std::vector<std::string> &vSelected);
-
-    /// @brief select subgraph using first available atoms in permuted candidate list
-    /// @return
-    std::vector<std::string>
-    select();
-
-public:
-    void solve();
-
-    std::vector<std::string>
-    text();
-
-    void generate1();
-    void setMatch(
-        const std::string &s);
-    bool setRoot(
-        const std::string &s);
-};
+#include "cSolver.h"
+#include "cGUI.h"
 
 /// @brief true if name is in strings
 /// @param strings
@@ -248,24 +204,41 @@ void cSolver::setMatch(
     match.clear();
     std::stringstream sst(s);
     std::string a;
-    while( getline( sst, a, ' ' ) )
-        match.push_back( a );
-    
+    while (getline(sst, a, ' '))
+        match.push_back(a);
 }
 bool cSolver::setRoot(
     const std::string &s)
+{
+    for (int v = 0; v < gd.g.vertexCount(); v++)
     {
-        for( int v = 0; v < gd.g.vertexCount(); v++ )
+        auto name = gd.g.userName(v);
+        if (name.substr(0, 1) == s)
         {
-            auto name = gd.g.userName(v);
-            if( name.substr(0,1) == s)
-            {
-                root = name;
-                return true;
-            }
+            root = name;
+            return true;
         }
-        return false;
     }
+    return false;
+}
+
+bool cSolver::read(
+    const std::string &fname)
+{
+    gd.g.clear();
+    std::ifstream ifs(fname);
+    if (!ifs.is_open())
+        return false;
+    std::string va, vb;
+    ifs >> va >> vb;
+    while (ifs.good())
+    {
+        gd.g.add(va, vb);
+        ifs >> va >> vb;
+    }
+    return true;
+}
+
 void cSolver::solve()
 {
     sanity();
@@ -305,20 +278,6 @@ cSolver::text()
     return vs;
 }
 
-class cGUI : public cStarterGUI
-{
-public:
-    cGUI();
-
-private:
-    wex::label &mylbRoot;
-    wex::editbox &myedRoot;
-    wex::label &mylbMatch;
-    wex::editbox &myEdit;
-    wex::button &mybn;
-    cSolver solver;
-};
-
 cGUI::cGUI()
     : cStarterGUI(
           "so76972353",
@@ -327,26 +286,44 @@ cGUI::cGUI()
       mylbMatch(wex::maker::make<wex::label>(fm)),
       myEdit(wex::maker::make<wex::editbox>(fm)),
       myedRoot(wex::maker::make<wex::editbox>(fm)),
+      mybnRead(wex::maker::make<wex::button>(fm)),
       mybn(wex::maker::make<wex::button>(fm))
 {
     // generate problem instance from specifications
     solver.generate1();
 
-    mylbRoot.move(20, 20, 70, 25);
+    int y = 20;
+    mybnRead.move(20, y, 100, 30);
+    mybnRead.text("Read Molecule");
+    y += 35;
+    mylbRoot.move(20, y, 70, 25);
     mylbRoot.text("Root Index");
-    myedRoot.move(90, 20, 50, 25);
+    myedRoot.move(90, y, 50, 25);
     myedRoot.text("");
-    mylbMatch.move(20,50, 50, 25);
+    y += 30;
+    mylbMatch.move(20, y, 50, 25);
     mylbMatch.text("Set");
-    myEdit.move(90, 50, 200, 25);
+    myEdit.move(90, y, 200, 25);
     myEdit.text("");
-
-    mybn.move(350, 20, 100, 30);
+    y += 30;
+    mybn.move(20, y, 100, 30);
     mybn.text("SOLVE");
+
+    mybnRead.events().click(
+        [&]
+        {
+            wex::filebox fb(fm);
+            if (!solver.read(fb.open()))
+            {
+                wex::msgbox("Error\nCannot read file");
+                return;
+            }
+        });
+
     mybn.events().click(
         [&]
         {
-            if( ! solver.setRoot(myedRoot.text()) )
+            if (!solver.setRoot(myedRoot.text()))
             {
                 wex::msgbox("Error\nCannot find root");
                 return;
@@ -363,7 +340,7 @@ cGUI::cGUI()
             int row = 0;
             for (auto &line : solver.text())
             {
-                S.text(line, {80, 100 + 50 * row++, 200, 25});
+                S.text(line, {80, 150 + 50 * row++, 200, 25});
             }
         });
 
@@ -373,7 +350,6 @@ cGUI::cGUI()
 
 main()
 {
-
     cGUI theGUI;
     return 0;
 }
