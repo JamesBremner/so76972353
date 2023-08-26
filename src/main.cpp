@@ -18,7 +18,38 @@ struct cSolver
     bool fRootInMatch;
 
     void sanity();
-} gPI;
+    void removeCandidatesNotInMatch();
+
+    /// @brief Is there path from vertex to root through vertex types in match set
+    /// @param vi
+    /// @return
+    bool isPathToRoot(int vi);
+
+    void addCandidatesReachableFromRoot();
+
+    void sortCandidates();
+
+    std::vector<std::string>
+    listRootConnected();
+
+    void removeUnconnected();
+
+    void addIfNovel(
+        const std::vector<std::string> &vSelected);
+
+    /// @brief select subgraph using first available atoms in permuted candidate list
+    /// @return
+    std::vector<std::string>
+    select();
+
+    void solve();
+
+    std::vector<std::string>
+    text();
+
+    void generate1();
+
+};
 
 /// @brief true if name is in strings
 /// @param strings
@@ -37,183 +68,211 @@ void cSolver::sanity()
     // check match set includes root node type
     fRootInMatch = is_in(match, root.substr(1, 1));
 }
-
-void generate1()
+void cSolver::removeCandidatesNotInMatch()
 {
-    gPI.gd.g.clear();
-    gPI.gd.g.add("2B", "1A");
-    gPI.gd.g.add("2B", "3A");
-    gPI.gd.g.add("2B", "4A");
-    gPI.gd.g.add("2B", "5C");
-    gPI.gd.g.add("3A", "10D");
-
-    std::vector<std::string> m{
-        "B", "A", "A"};
-    gPI.match = m;
-
-    gPI.root = "2B";
+    candidates.erase(
+        std::remove_if(
+            candidates.begin(), candidates.end(),
+            [this](const std::string &c) -> bool
+            {
+                return (!is_in(match, c.substr(1, 1)));
+            }),
+        candidates.end());
 }
 
-void findCandidates()
+bool cSolver::isPathToRoot(int vi)
 {
-    gPI.sanity();
-
-    raven::graph::cGraph &g = gPI.gd.g;
-
-    // atoms connected directly to root
-    gPI.candidates = g.userName(g.adjacentOut(g.find(gPI.root)));
-
-    for (int v = 0; v < g.vertexCount(); v++)
+    // all paths from v to root
+    gd.startName = root;
+    gd.endName = gd.g.userName(vi);
+    auto vp = dfs_allpaths(gd);
+    if (!vp.size())
     {
-        auto name = g.userName(v);
-
-        // check for already a candidate
-        if (is_in(gPI.candidates, name))
-            continue;
-
-        // check for type in match list
-        if (!is_in(gPI.match, name.substr(1, 1)))
-            continue;
-
-        // all paths from v to root
-        gPI.gd.startName = gPI.root;
-        gPI.gd.endName = g.userName(v);
-        auto vp = dfs_allpaths(gPI.gd);
-        if (!vp.size())
+        // v not reachable from root
+        return false;
+    }
+    for (auto &p : vp)
+    {
+        bool pathOK = true;
+        for (int u : p)
         {
-            // v not reachable from root
-            continue;
-        }
-        bool reachable = false;
-        for (auto &p : vp)
-        {
-            bool pathOK = true;
-            for (int u : p)
+            if (!is_in(
+                    match,
+                    gd.g.userName(u).substr(1, 1)))
             {
-                if (!is_in(
-                        gPI.match,
-                        g.userName(u).substr(1, 1)))
-                {
-                    // v not reachable through atom types in match
-                    pathOK = false;
-                    break;
-                }
-            }
-            if (pathOK)
-            {
-                reachable = true;
+                // v not reachable through atom types in match
+                pathOK = false;
                 break;
             }
         }
-
-        if (!reachable)
-            break;
-
-        gPI.candidates.push_back(g.userName(v));
+        if (pathOK)
+            return true;
     }
-
-    // remove if not in match list
-    gPI.candidates.erase(
-        std::remove_if(
-            gPI.candidates.begin(), gPI.candidates.end(),
-            [](const std::string &c) -> bool
-            {
-                return (!is_in(gPI.match, c.substr(1, 1)));
-            }),
-        gPI.candidates.end());
-
-    std::cout << "Candidates: ";
-    for (auto &c : gPI.candidates)
-        std::cout << c << " ";
-    std::cout << "\n";
+    return false;
 }
 
-void findSubGraphs()
+void cSolver::addCandidatesReachableFromRoot()
 {
-    // Start with vector of candidates sorted into lexigraphic order
-    auto vc = gPI.candidates;
-    std::sort(vc.begin(), vc.end(),
+    for (int v = 0; v < gd.g.vertexCount(); v++)
+    {
+        auto name = gd.g.userName(v);
+
+        // check for already a candidate
+        if (is_in(candidates, name))
+            continue;
+
+        // check for type in match list
+        if (!is_in(match, name.substr(1, 1)))
+            continue;
+
+        // check root reachable via vertices with matching types
+        if (!isPathToRoot(v))
+            continue;
+
+        candidates.push_back(name);
+    }
+}
+
+void cSolver::sortCandidates()
+{
+    std::sort(candidates.begin(), candidates.end(),
               [](const std::string &a, const std::string &b) -> bool
               {
                   return a < b;
               });
-
-    // loop over permuted lists of candidate
-    do
-    {
-        // a new empty selection
-        std::vector<std::string> vSelected;
-
-        // loop over candidates in permuted list
-        for (auto &consider : vc)
-        {
-            std::string considerType = consider.substr(1, 1);
-
-            // count number of this type required
-            int cm = std::count(gPI.match.begin(), gPI.match.end(), considerType);
-
-            // count number of of this type selected so far
-            int cSelected = std::count_if(vSelected.begin(), vSelected.end(),
-                                          [&](const std::string &b) -> bool
-                                          {
-                                              return considerType[0] == b[1];
-                                          });
-
-            // add to selection if another of this type is required
-            if (cm > cSelected)
-                vSelected.push_back(consider);
-        }
-
-        // check we have a selection
-        if (!vSelected.size())
-            continue;
-
-        // add root if not in match set
-        if (!gPI.fRootInMatch)
-            vSelected.insert(vSelected.begin(), gPI.root);
-
-        // check that this a unique selection
-        if (std::find_if(gPI.subGraphs.begin(), gPI.subGraphs.end(),
-                         [&](const std::vector<std::string> &v) -> bool
-                         {
-                             return std::is_permutation(v.begin(), v.end(), vSelected.begin());
-                         }) == gPI.subGraphs.end())
-        {
-            // add selection to output list of selection
-            gPI.subGraphs.push_back(vSelected);
-        }
-
-    } while (std::next_permutation(vc.begin(), vc.end()));
-
-    // remove subgraphs that are not connected
-    auto rootConnected = gPI.gd.g.userName(gPI.gd.g.adjacentOut(gPI.gd.g.find(gPI.root)));
+}
+std::vector<std::string>
+cSolver::listRootConnected()
+{
+    return gd.g.userName(gd.g.adjacentOut(gd.g.find(root)));
+}
+void cSolver::removeUnconnected()
+{
+    auto rootConnected = listRootConnected();
     std::vector<int> vrem;
     int k = -1;
-    for (auto sg : gPI.subGraphs)
+    for (auto sg : subGraphs)
     {
         k++;
         for (auto v : sg)
         {
             if (std::find(rootConnected.begin(), rootConnected.end(), v) != rootConnected.end())
                 continue;
-            gPI.gd.startName = gPI.root;
-            gPI.gd.endName = v;
-            if (bfsPath(gPI.gd).size())
+            gd.startName = root;
+            gd.endName = v;
+            if (bfsPath(gd).size())
                 continue;
             vrem.push_back(k);
         }
         for (int r : vrem)
-            gPI.subGraphs.erase(
-                gPI.subGraphs.begin() + r);
+            subGraphs.erase(
+                subGraphs.begin() + r);
+    }
+}
+
+void cSolver::addIfNovel(
+    const std::vector<std::string> &vSelected)
+{
+    if (std::find_if(subGraphs.begin(), subGraphs.end(),
+                     [&](const std::vector<std::string> &v) -> bool
+                     {
+                         return std::is_permutation(v.begin(), v.end(), vSelected.begin());
+                     }) == subGraphs.end())
+        subGraphs.push_back(vSelected);
+}
+
+std::vector<std::string>
+cSolver::select()
+{
+    // a new empty selection
+    std::vector<std::string> vSelected;
+
+    // loop over candidates in permuted list
+    for (auto &consider : candidates)
+    {
+        std::string considerType = consider.substr(1, 1);
+
+        // count number of this type required
+        int cm = std::count(match.begin(), match.end(), considerType);
+
+        // count number of of this type selected so far
+        int cSelected = std::count_if(vSelected.begin(), vSelected.end(),
+                                      [&](const std::string &b) -> bool
+                                      {
+                                          return considerType[0] == b[1];
+                                      });
+
+        // add to selection if another of this type is required
+        if (cm > cSelected)
+            vSelected.push_back(consider);
     }
 
-    std::cout << "\nResults\n";
-    for (auto &v : gPI.subGraphs)
+    // check we have a selection
+    if (!vSelected.size())
+        return vSelected;
+
+    // add root if not in match set
+    if (!fRootInMatch)
+        vSelected.insert(vSelected.begin(), root);
+
+    addIfNovel(vSelected);
+
+    return vSelected;
+}
+
+void cSolver::generate1()
+{
+    gd.g.clear();
+    gd.g.add("2B", "1A");
+    gd.g.add("2B", "3A");
+    gd.g.add("2B", "4A");
+    gd.g.add("2B", "5C");
+    gd.g.add("3A", "10D");
+
+    std::vector<std::string> m{
+        "B", "A", "A"};
+    match = m;
+
+    root = "2B";
+}
+
+void cSolver::solve()
+{
+    sanity();
+
+    // atoms connected directly to root
+    candidates = gd.g.userName(gd.g.adjacentOut(gd.g.find(root)));
+    removeCandidatesNotInMatch();
+
+    addCandidatesReachableFromRoot();
+
+    sortCandidates();
+
+    // loop over permuted lists of candidates
+    do
     {
+        select();
+
+    } while (std::next_permutation(
+        candidates.begin(), candidates.end()));
+
+    // remove subgraphs that are not connected
+    removeUnconnected();
+}
+
+std::vector<std::string>
+cSolver::text()
+{
+    std::vector<std::string> vs;
+    vs.push_back("Results");
+    for (auto &v : subGraphs)
+    {
+        std::string line;
         for (auto s : v)
-            std::cout << s << " ";
-        std::cout << "\n";
+            line += s + " ";
+        vs.push_back(line);
     }
+    return vs;
 }
 
 class cGUI : public cStarterGUI
@@ -224,11 +283,21 @@ public:
               "so76972353",
               {50, 50, 1000, 500})
     {
+        // generate problem instance from specifications
+        solver.generate1();
+
+        // list fragments
+        solver.solve();
+
         fm.events().draw(
             [&](PAINTSTRUCT &ps)
             {
                 wex::shapes S(ps);
-                display(S);
+                int row = 0;
+                for (auto &line : solver.text())
+                {
+                    S.text(line, {80, 50 + 50 * row++, 200, 25});
+                }
             });
 
         show();
@@ -236,29 +305,11 @@ public:
     }
 
 private:
-    void display(wex::shapes &S)
-    {
-        int row = 0;
-        for (auto &v : gPI.subGraphs)
-        {
-            std::string line;
-            for (auto s : v)
-                line += s + " ";
-            S.text(line, {80, 50 + 50 * row++, 200, 25});
-        }
-    }
+    cSolver solver;
 };
 
 main()
 {
-    // generate problem instance from specifications
-    generate1();
-
-    // find candidate atoms that vould be included in fragments
-    findCandidates();
-
-    // list fragments
-    findSubGraphs();
 
     cGUI theGUI;
     return 0;
