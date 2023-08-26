@@ -51,6 +51,8 @@ public:
     void generate1();
     void setMatch(
         const std::string &s);
+    bool setRoot(
+        const std::string &s);
 };
 
 /// @brief true if name is in strings
@@ -250,13 +252,26 @@ void cSolver::setMatch(
         match.push_back( a );
     
 }
-
+bool cSolver::setRoot(
+    const std::string &s)
+    {
+        for( int v = 0; v < gd.g.vertexCount(); v++ )
+        {
+            auto name = gd.g.userName(v);
+            if( name.substr(0,1) == s)
+            {
+                root = name;
+                return true;
+            }
+        }
+        return false;
+    }
 void cSolver::solve()
 {
     sanity();
 
     // atoms connected directly to root
-    candidates = gd.g.userName(gd.g.adjacentOut(gd.g.find(root)));
+    candidates = listRootConnected();
     removeCandidatesNotInMatch();
 
     addCandidatesReachableFromRoot();
@@ -296,6 +311,9 @@ public:
     cGUI();
 
 private:
+    wex::label &mylbRoot;
+    wex::editbox &myedRoot;
+    wex::label &mylbMatch;
     wex::editbox &myEdit;
     wex::button &mybn;
     cSolver solver;
@@ -305,20 +323,34 @@ cGUI::cGUI()
     : cStarterGUI(
           "so76972353",
           {50, 50, 1000, 500}),
+      mylbRoot(wex::maker::make<wex::label>(fm)),
+      mylbMatch(wex::maker::make<wex::label>(fm)),
       myEdit(wex::maker::make<wex::editbox>(fm)),
+      myedRoot(wex::maker::make<wex::editbox>(fm)),
       mybn(wex::maker::make<wex::button>(fm))
 {
     // generate problem instance from specifications
     solver.generate1();
 
-    myEdit.move(20, 20, 200, 25);
+    mylbRoot.move(20, 20, 70, 25);
+    mylbRoot.text("Root Index");
+    myedRoot.move(90, 20, 50, 25);
+    myedRoot.text("");
+    mylbMatch.move(20,50, 50, 25);
+    mylbMatch.text("Set");
+    myEdit.move(90, 50, 200, 25);
     myEdit.text("");
 
-    mybn.move(300, 20, 100, 30);
+    mybn.move(350, 20, 100, 30);
     mybn.text("SOLVE");
     mybn.events().click(
         [&]
         {
+            if( ! solver.setRoot(myedRoot.text()) )
+            {
+                wex::msgbox("Error\nCannot find root");
+                return;
+            }
             solver.setMatch(myEdit.text());
             solver.solve();
             fm.update();
@@ -331,7 +363,7 @@ cGUI::cGUI()
             int row = 0;
             for (auto &line : solver.text())
             {
-                S.text(line, {80, 50 + 50 * row++, 200, 25});
+                S.text(line, {80, 100 + 50 * row++, 200, 25});
             }
         });
 
