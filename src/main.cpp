@@ -8,7 +8,7 @@
 #include <GraphTheory.h>
 #include "cStarterGUI.h"
 
-struct cSolver
+class cSolver
 {
     raven::graph::sGraphData gd; // graph representation of molecule
     std::string root;
@@ -42,13 +42,15 @@ struct cSolver
     std::vector<std::string>
     select();
 
+public:
     void solve();
 
     std::vector<std::string>
     text();
 
     void generate1();
-
+    void setMatch(
+        const std::string &s);
 };
 
 /// @brief true if name is in strings
@@ -67,6 +69,8 @@ void cSolver::sanity()
 {
     // check match set includes root node type
     fRootInMatch = is_in(match, root.substr(1, 1));
+    candidates.clear();
+    subGraphs.clear();
 }
 void cSolver::removeCandidatesNotInMatch()
 {
@@ -236,6 +240,17 @@ void cSolver::generate1()
     root = "2B";
 }
 
+void cSolver::setMatch(
+    const std::string &s)
+{
+    match.clear();
+    std::stringstream sst(s);
+    std::string a;
+    while( getline( sst, a, ' ' ) )
+        match.push_back( a );
+    
+}
+
 void cSolver::solve()
 {
     sanity();
@@ -278,35 +293,51 @@ cSolver::text()
 class cGUI : public cStarterGUI
 {
 public:
-    cGUI()
-        : cStarterGUI(
-              "so76972353",
-              {50, 50, 1000, 500})
-    {
-        // generate problem instance from specifications
-        solver.generate1();
-
-        // list fragments
-        solver.solve();
-
-        fm.events().draw(
-            [&](PAINTSTRUCT &ps)
-            {
-                wex::shapes S(ps);
-                int row = 0;
-                for (auto &line : solver.text())
-                {
-                    S.text(line, {80, 50 + 50 * row++, 200, 25});
-                }
-            });
-
-        show();
-        run();
-    }
+    cGUI();
 
 private:
+    wex::editbox &myEdit;
+    wex::button &mybn;
     cSolver solver;
 };
+
+cGUI::cGUI()
+    : cStarterGUI(
+          "so76972353",
+          {50, 50, 1000, 500}),
+      myEdit(wex::maker::make<wex::editbox>(fm)),
+      mybn(wex::maker::make<wex::button>(fm))
+{
+    // generate problem instance from specifications
+    solver.generate1();
+
+    myEdit.move(20, 20, 200, 25);
+    myEdit.text("");
+
+    mybn.move(300, 20, 100, 30);
+    mybn.text("SOLVE");
+    mybn.events().click(
+        [&]
+        {
+            solver.setMatch(myEdit.text());
+            solver.solve();
+            fm.update();
+        });
+
+    fm.events().draw(
+        [&](PAINTSTRUCT &ps)
+        {
+            wex::shapes S(ps);
+            int row = 0;
+            for (auto &line : solver.text())
+            {
+                S.text(line, {80, 50 + 50 * row++, 200, 25});
+            }
+        });
+
+    show();
+    run();
+}
 
 main()
 {
