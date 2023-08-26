@@ -8,13 +8,16 @@
 #include <GraphTheory.h>
 #include "cStarterGUI.h"
 
-struct sProblemInstance
+struct cSolver
 {
     raven::graph::sGraphData gd; // graph representation of molecule
     std::string root;
     std::vector<std::string> match; // required atoms
     std::vector<std::string> candidates;
     std::vector<std::vector<std::string>> subGraphs;
+    bool fRootInMatch;
+
+    void sanity();
 } gPI;
 
 /// @brief true if name is in strings
@@ -26,7 +29,13 @@ bool is_in(
 {
     return (std::find(
                 strings.begin(), strings.end(),
-                name) != gPI.candidates.end());
+                name) != strings.end());
+}
+
+void cSolver::sanity()
+{
+    // check match set includes root node type
+    fRootInMatch = is_in(match, root.substr(1, 1));
 }
 
 void generate1()
@@ -47,10 +56,7 @@ void generate1()
 
 void findCandidates()
 {
-    // check set includes root node type
-    if (!is_in(gPI.match, gPI.root.substr(1, 1)))
-        throw std::runtime_error(
-            "match set does not include root type");
+    gPI.sanity();
 
     raven::graph::cGraph &g = gPI.gd.g;
 
@@ -66,7 +72,7 @@ void findCandidates()
             continue;
 
         // check for type in match list
-        if (is_in(gPI.match, name.substr(1, 1)))
+        if (!is_in(gPI.match, name.substr(1, 1)))
             continue;
 
         // all paths from v to root
@@ -159,18 +165,22 @@ void findSubGraphs()
         }
 
         // check we have a selection
-        if (vSelected.size())
+        if (!vSelected.size())
+            continue;
+
+        // add root if not in match set
+        if (!gPI.fRootInMatch)
+            vSelected.insert(vSelected.begin(), gPI.root);
+
+        // check that this a unique selection
+        if (std::find_if(gPI.subGraphs.begin(), gPI.subGraphs.end(),
+                         [&](const std::vector<std::string> &v) -> bool
+                         {
+                             return std::is_permutation(v.begin(), v.end(), vSelected.begin());
+                         }) == gPI.subGraphs.end())
         {
-            // check that this a unique selection
-            if (std::find_if(gPI.subGraphs.begin(), gPI.subGraphs.end(),
-                             [&](const std::vector<std::string> &v) -> bool
-                             {
-                                 return std::is_permutation(v.begin(), v.end(), vSelected.begin());
-                             }) == gPI.subGraphs.end())
-            {
-                // add selection to output list of selection
-                gPI.subGraphs.push_back(vSelected);
-            }
+            // add selection to output list of selection
+            gPI.subGraphs.push_back(vSelected);
         }
 
     } while (std::next_permutation(vc.begin(), vc.end()));
